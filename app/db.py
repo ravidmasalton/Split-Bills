@@ -1,6 +1,10 @@
 import os
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
+from dotenv import load_dotenv
+
+# טוען משתני סביבה מהקובץ .env
+load_dotenv()
 
 def default_mongo_url():
     if os.path.exists("/.dockerenv") or os.getenv("RUNNING_IN_DOCKER") == "1":
