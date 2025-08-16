@@ -1,0 +1,135 @@
+# =====================================================
+# Environment Files - סודות וסיסמאות
+# =====================================================
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# =====================================================
+# Python
+# =====================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# =====================================================
+# Virtual Environments
+# =====================================================
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# =====================================================
+# IDEs and Editors
+# =====================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.ropeproject
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# =====================================================
+# OS Generated Files
+# =====================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =====================================================
+# Docker
+# =====================================================
+.dockerignore
+
+# =====================================================
+# Logs
+# =====================================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =====================================================
+# Database Files
+# =====================================================
+*.db
+*.sqlite3
+*.sqlite
+
+# =====================================================
+# Node.js (למקרה שתוסיף frontend בעתיד)
+# =====================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =====================================================
+# Temporary Files
+# =====================================================
+*.tmp
+*.temp
+.cache/
+
+# =====================================================
+# FastAPI specific
+# =====================================================
+.pytest_cache/
