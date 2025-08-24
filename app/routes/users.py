@@ -1,9 +1,9 @@
 # ✅ app/routes/users.py - ללא bcrypt
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.user import UserCreate, UserLogin, UserOut
-from app.db import db
+from app.services.db import db
 from datetime import datetime
-from app.auth import create_access_token, get_current_user
+from app.services.auth import create_access_token, get_current_user
 from bson import ObjectId
 from typing import List
 import hashlib
