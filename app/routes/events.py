@@ -450,3 +450,251 @@ def finalize_event(event_id: str, final_currency: str, current_user: dict = Depe
         payments_needed=payments,
         total_expenses=round(total_expenses_final, 2)
     )
+
+
+@router.delete("/{event_id}/expenses/{expense_index}")
+def delete_expense(
+    event_id: str, 
+    expense_index: int, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an expense and reverse its balance changes"""
+    
+    try:
+        event = events_collection.find_one({"_id": ObjectId(event_id)})
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Check user is a member
+    if current_user["user_id"] not in [m["user_id"] for m in event["members"]]:
+        raise HTTPException(status_code=403, detail="You are not a member of this event")
+
+    # Check expense exists
+    if expense_index < 0 or expense_index >= len(event.get("expenses", [])):
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    expense = event["expenses"][expense_index]
+
+    # Reverse the balance changes
+    currency = expense["currency"]
+    
+    if "currency_balances" in event and currency in event["currency_balances"]:
+        for participant in expense.get("participants", []):
+            user_id = participant["user_id"]
+            
+            # Reverse the balance change
+            if "paid" in participant and "responsible_for" in participant:
+                # Advanced expense
+                balance_change = participant["paid"] - participant["responsible_for"]
+                if user_id in event["currency_balances"][currency]:
+                    event["currency_balances"][currency][user_id] -= balance_change
+            elif "share" in participant:
+                # Old-style expense - might need different logic
+                pass
+
+    # Reverse total expenses
+    if "total_expenses_by_currency" in event and currency in event["total_expenses_by_currency"]:
+        event["total_expenses_by_currency"][currency] -= expense["amount"]
+        
+        # Remove currency if total is zero
+        if abs(event["total_expenses_by_currency"][currency]) < 0.01:
+            del event["total_expenses_by_currency"][currency]
+            if currency in event.get("currency_balances", {}):
+                del event["currency_balances"][currency]
+
+    # Remove the expense
+    event["expenses"].pop(expense_index)
+
+    # Update database
+    events_collection.update_one(
+        {"_id": ObjectId(event_id)},
+        {"$set": {
+            "currency_balances": event.get("currency_balances", {}),
+            "total_expenses_by_currency": event.get("total_expenses_by_currency", {}),
+            "expenses": event["expenses"]
+        }}
+    )
+
+    return {"message": "Expense deleted successfully", "expense_index": expense_index}
+
+
+@router.put("/{event_id}/expenses/{expense_index}", response_model=EventOut)
+def update_expense(
+    event_id: str,
+    expense_index: int,
+    expense: FlexibleExpense,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an expense - reverses old calculations and applies new ones"""
+    
+    try:
+        event = events_collection.find_one({"_id": ObjectId(event_id)})
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Check user is a member
+    if current_user["user_id"] not in [m["user_id"] for m in event["members"]]:
+        raise HTTPException(status_code=403, detail="You are not a member of this event")
+
+    # Check expense exists
+    if expense_index < 0 or expense_index >= len(event.get("expenses", [])):
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    old_expense = event["expenses"][expense_index]
+
+    # Validate new expense
+    total_responsibility = sum(p.responsible_for for p in expense.participants)
+    if abs(total_responsibility - expense.amount) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sum of responsibilities ({total_responsibility}) must equal total amount ({expense.amount})"
+        )
+    
+    total_paid = sum(p.paid for p in expense.participants)
+    if abs(total_paid - expense.amount) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sum of payments ({total_paid}) must equal total amount ({expense.amount})"
+        )
+
+    # Convert emails to user_ids
+    participant_data = []
+    event_member_emails = {m["email"]: m["user_id"] for m in event["members"]}
+    
+    for participant in expense.participants:
+        if participant.email not in event_member_emails:
+            raise HTTPException(status_code=400, detail=f"User {participant.email} is not a member of this event")
+        
+        user_id = event_member_emails[participant.email]
+        participant_data.append({
+            "user_id": user_id,
+            "email": participant.email,
+            "responsible_for": participant.responsible_for,
+            "paid": participant.paid
+        })
+
+    # Initialize if needed
+    if "currency_balances" not in event:
+        event["currency_balances"] = {}
+    if "total_expenses_by_currency" not in event:
+        event["total_expenses_by_currency"] = {}
+
+    # STEP 1: Reverse old expense calculations
+    old_currency = old_expense["currency"]
+    
+    if old_currency in event["currency_balances"]:
+        for participant in old_expense.get("participants", []):
+            user_id = participant["user_id"]
+            if "paid" in participant and "responsible_for" in participant:
+                balance_change = participant["paid"] - participant["responsible_for"]
+                if user_id in event["currency_balances"][old_currency]:
+                    event["currency_balances"][old_currency][user_id] -= balance_change
+
+    if old_currency in event["total_expenses_by_currency"]:
+        event["total_expenses_by_currency"][old_currency] -= old_expense["amount"]
+        
+        # Clean up if zero
+        if abs(event["total_expenses_by_currency"][old_currency]) < 0.01:
+            del event["total_expenses_by_currency"][old_currency]
+            if old_currency in event["currency_balances"]:
+                # Check if all balances are zero
+                all_zero = all(abs(b) < 0.01 for b in event["currency_balances"][old_currency].values())
+                if all_zero:
+                    del event["currency_balances"][old_currency]
+
+    # STEP 2: Apply new expense calculations
+    new_currency = expense.currency
+    
+    if new_currency not in event["currency_balances"]:
+        event["currency_balances"][new_currency] = {}
+
+    for participant in participant_data:
+        user_id = participant["user_id"]
+        responsible_for = participant["responsible_for"]
+        paid = participant["paid"]
+        
+        if user_id not in event["currency_balances"][new_currency]:
+            event["currency_balances"][new_currency][user_id] = 0.0
+        
+        balance_change = paid - responsible_for
+        event["currency_balances"][new_currency][user_id] += balance_change
+
+    if new_currency not in event["total_expenses_by_currency"]:
+        event["total_expenses_by_currency"][new_currency] = 0.0
+    
+    event["total_expenses_by_currency"][new_currency] += expense.amount
+
+    # STEP 3: Update the expense record
+    expense_record = {
+        "created_by": old_expense.get("created_by", current_user["user_id"]),
+        "amount": expense.amount,
+        "currency": expense.currency,
+        "participants": participant_data,
+        "note": expense.note,
+        "expense_type": "advanced",
+        "created_at": old_expense.get("created_at", datetime.utcnow()),
+        "updated_at": datetime.utcnow()
+    }
+    
+    event["expenses"][expense_index] = expense_record
+
+    # Update database
+    events_collection.update_one(
+        {"_id": ObjectId(event_id)},
+        {"$set": {
+            "currency_balances": event["currency_balances"],
+            "total_expenses_by_currency": event["total_expenses_by_currency"],
+            "expenses": event["expenses"]
+        }}
+    )
+
+    # Return updated event
+    event["_id"] = str(event["_id"])
+    
+    expenses_out = []
+    for exp in event["expenses"]:
+        participants_for_output = []
+        for p in exp["participants"]:
+            if "paid" in p and "responsible_for" in p:
+                participants_for_output.append({
+                    "user_id": p["user_id"],
+                    "share": p["paid"]
+                })
+            elif "share" in p:
+                participants_for_output.append({
+                    "user_id": p["user_id"],
+                    "share": p["share"]
+                })
+            else:
+                participants_for_output.append({
+                    "user_id": p.get("user_id", ""),
+                    "share": 0.0
+                })
+        
+        expenses_out.append(ExpenseOut(
+            payer_id=exp.get("created_by", exp.get("payer_id", "")),
+            amount=exp["amount"],
+            currency=exp["currency"],
+            amount_in_base_currency=exp["amount"],
+            participants=participants_for_output,
+            note=exp.get("note", ""),
+            exchange_rate=None,
+            created_at=exp["created_at"]
+        ))
+    
+    return EventOut(
+        id=event["_id"],
+        name=event["name"],
+        base_currency="FLEXIBLE",
+        created_by=event["created_by"],
+        created_at=event["created_at"],
+        members=[{"user_id": m["user_id"], "email": m["email"], "balance": 0.0} for m in event["members"]],
+        expenses=expenses_out,
+        total_expenses=0.0
+    )
