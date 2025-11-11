@@ -191,10 +191,12 @@ def add_flexible_expense(event_id: str, expense: FlexibleExpense, current_user: 
         participants_for_output = []
         for p in exp["participants"]:
             if "paid" in p and "responsible_for" in p:
-                # הוצאה מתקדמת חדשה
+                # הוצאה מתקדמת - שמור את כל הנתונים
                 participants_for_output.append({
                     "user_id": p["user_id"],
-                    "share": p["paid"]  # נציג את מה ששילם בפועל
+                    "share": p["paid"],
+                    "responsible_for": p["responsible_for"],
+                    "paid": p["paid"]
                 })
             elif "share" in p:
                 # הוצאה ישנה
@@ -299,7 +301,12 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
         participants_for_output = []
         for p in expense.get("participants", []):
             if "paid" in p and "responsible_for" in p:
-                participants_for_output.append({"user_id": p["user_id"], "share": p["paid"]})
+                participants_for_output.append({
+                    "user_id": p["user_id"],
+                    "share": p["paid"],
+                    "responsible_for": p["responsible_for"],
+                    "paid": p["paid"]
+                })
             elif "share" in p:
                 participants_for_output.append({"user_id": p["user_id"], "share": p["share"]})
             else:
@@ -664,7 +671,9 @@ def update_expense(
             if "paid" in p and "responsible_for" in p:
                 participants_for_output.append({
                     "user_id": p["user_id"],
-                    "share": p["paid"]
+                    "share": p["paid"],
+                    "responsible_for": p["responsible_for"],
+                    "paid": p["paid"]
                 })
             elif "share" in p:
                 participants_for_output.append({
