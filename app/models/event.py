@@ -56,6 +56,8 @@ class ExpenseParticipant(BaseModel):
     """Represents a participant's share in an expense (output model)"""
     user_id: str
     share: float
+    responsible_for: Optional[float] = None
+    paid: Optional[float] = None
 
 
 class ParticipantExpense(BaseModel):
