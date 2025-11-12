@@ -458,6 +458,25 @@ def finalize_event(event_id: str, final_currency: str, current_user: dict = Depe
         total_expenses=round(total_expenses_final, 2)
     )
 
+@router.delete("/{event_id}")
+def delete_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an event if the current user is the creator"""
+    
+    try:
+        event = events_collection.find_one({"_id": ObjectId(event_id)})
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event["created_by"] != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the creator can delete this event")
+
+    events_collection.delete_one({"_id": ObjectId(event_id)})
+
+    return {"message": "Event deleted successfully", "event_id": event_id}
+
 
 @router.delete("/{event_id}/expenses/{expense_index}")
 def delete_expense(
