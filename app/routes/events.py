@@ -166,7 +166,7 @@ def add_flexible_expense(event_id: str, expense: FlexibleExpense, current_user: 
         "currency": expense.currency,
         "participants": participant_data,
         "note": expense.note,
-        "expense_type": "advanced",  # סימון שזו הוצאה מתקדמת
+        "expense_type": "advanced",
         "created_at": datetime.utcnow()
     }
     
@@ -187,11 +187,9 @@ def add_flexible_expense(event_id: str, expense: FlexibleExpense, current_user: 
     
     expenses_out = []
     for exp in event["expenses"]:
-        # התאמה למבנה ExpenseOut
         participants_for_output = []
         for p in exp["participants"]:
             if "paid" in p and "responsible_for" in p:
-                # הוצאה מתקדמת - שמור את כל הנתונים
                 participants_for_output.append({
                     "user_id": p["user_id"],
                     "share": p["paid"],
@@ -199,13 +197,11 @@ def add_flexible_expense(event_id: str, expense: FlexibleExpense, current_user: 
                     "paid": p["paid"]
                 })
             elif "share" in p:
-                # הוצאה ישנה
                 participants_for_output.append({
                     "user_id": p["user_id"],
                     "share": p["share"]
                 })
             else:
-                # fallback
                 participants_for_output.append({
                     "user_id": p.get("user_id", ""),
                     "share": 0.0
@@ -222,17 +218,33 @@ def add_flexible_expense(event_id: str, expense: FlexibleExpense, current_user: 
             created_at=exp["created_at"]
         ))
     
+    # Calculate balance for each member from all currencies
+    members_with_balance = []
+    for m in event["members"]:
+        user_id = m["user_id"]
+        total_balance = 0.0
+        
+        # Sum balances from all currencies
+        for currency, balances in event.get("currency_balances", {}).items():
+            user_balance = balances.get(user_id, 0.0)
+            total_balance += user_balance
+        
+        members_with_balance.append({
+            "user_id": user_id,
+            "email": m["email"],
+            "balance": total_balance
+        })
+    
     return EventOut(
         id=event["_id"],
         name=event["name"],
         base_currency="FLEXIBLE",
         created_by=event["created_by"],
         created_at=event["created_at"],
-        members=[{"user_id": m["user_id"], "email": m["email"], "balance": 0.0} for m in event["members"]],
+        members=members_with_balance,
         expenses=expenses_out,
         total_expenses=0.0
     )
-
 
 
 @router.get("/my-events")
@@ -697,7 +709,7 @@ def update_expense(
         }}
     )
 
-    # Return updated event
+ # Return updated event
     event["_id"] = str(event["_id"])
     
     expenses_out = []
@@ -733,13 +745,30 @@ def update_expense(
             created_at=exp["created_at"]
         ))
     
+    # Calculate balance for each member from all currencies
+    members_with_balance = []
+    for m in event["members"]:
+        user_id = m["user_id"]
+        total_balance = 0.0
+        
+        # Sum balances from all currencies
+        for currency, balances in event.get("currency_balances", {}).items():
+            user_balance = balances.get(user_id, 0.0)
+            total_balance += user_balance
+        
+        members_with_balance.append({
+            "user_id": user_id,
+            "email": m["email"],
+            "balance": total_balance
+        })
+    
     return EventOut(
         id=event["_id"],
         name=event["name"],
         base_currency="FLEXIBLE",
         created_by=event["created_by"],
         created_at=event["created_at"],
-        members=[{"user_id": m["user_id"], "email": m["email"], "balance": 0.0} for m in event["members"]],
+        members=members_with_balance,
         expenses=expenses_out,
         total_expenses=0.0
     )
