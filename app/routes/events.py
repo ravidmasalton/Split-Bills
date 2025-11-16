@@ -325,13 +325,30 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
 
     base_currency = event.get("base_currency") or "FLEXIBLE"
 
+    # Calculate balance for each member from all currencies
+    members_with_balance = []
+    for m in event["members"]:
+        user_id = m["user_id"]
+        total_balance = 0.0
+        
+        # Sum balances from all currencies
+        for currency, balances in event.get("currency_balances", {}).items():
+            user_balance = balances.get(user_id, 0.0)
+            total_balance += user_balance
+        
+        members_with_balance.append({
+            "user_id": user_id,
+            "email": m["email"],
+            "balance": total_balance
+        })
+
     return EventOut(
         id=event["_id"],
         name=event["name"],
         base_currency=base_currency,
         created_by=event["created_by"],
         created_at=event["created_at"],
-        members=[{"user_id": m["user_id"], "email": m["email"], "balance": 0.0} for m in event["members"]],
+        members=members_with_balance,
         expenses=expenses_out,
         total_expenses=0.0
     )
