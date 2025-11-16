@@ -309,6 +309,7 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
     event["_id"] = str(event["_id"])
 
     expenses_out = []
+    total_expenses = 0.0
     for expense in event.get("expenses", []):
         participants_for_output = []
         for p in expense.get("participants", []):
@@ -334,7 +335,7 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
             exchange_rate=None,
             created_at=expense.get("created_at", datetime.utcnow())
         ))
-
+        total_expenses += expense["amount"]
     base_currency = event.get("base_currency") or "FLEXIBLE"
 
     # Calculate balance for each member from all currencies
@@ -362,7 +363,7 @@ def get_event(event_id: str, current_user: dict = Depends(get_current_user)):
         created_at=event["created_at"],
         members=members_with_balance,
         expenses=expenses_out,
-        total_expenses=0.0
+        total_expenses=total_expenses
     )
 
 
